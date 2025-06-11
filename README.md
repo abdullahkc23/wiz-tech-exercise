@@ -17,4 +17,3 @@ This repo contains infrastructure as code to deploy:
 3. Push to main → triggers GitHub Actions
 4. View outputs in Terraform Cloud or workflow logs
 
-hello
