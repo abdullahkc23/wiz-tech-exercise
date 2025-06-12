@@ -67,22 +67,31 @@ resource "aws_instance" "mongo" {
   vpc_security_group_ids = [aws_security_group.ssh_access.id]
 
   tags = {
-    Name = "MongoDB VM"
+    Name = "MongoDB VM rebuild"
   }
 
   # Install outdated MongoDB 3.6 on startup
   user_data = <<-EOF
               #!/bin/bash
+              exec > /var/log/user-data.log 2>&1  # Log user data output
+              set -e
+
+              # Update package lists and install prerequisites
               apt-get update
-              apt-get install -y gnupg
+              apt-get install -y gnupg wget curl
+
+              # Add MongoDB 3.6 repo and key
               wget -qO - https://www.mongodb.org/static/pgp/server-3.6.asc | apt-key add -
               echo "deb [ arch=amd64 ] https://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.6 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-3.6.list
+
+              # Install MongoDB 3.6
               apt-get update
               apt-get install -y mongodb-org=3.6.23 mongodb-org-server=3.6.23 mongodb-org-shell=3.6.23 mongodb-org-mongos=3.6.23 mongodb-org-tools=3.6.23
+
+              # Start and enable mongod
               systemctl start mongod
               systemctl enable mongod
               EOF
-}
 
 # Create an S3 bucket for backups with a public website configuration (deprecated)
 resource "aws_s3_bucket" "public_backups" {
