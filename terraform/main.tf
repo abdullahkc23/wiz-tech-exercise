@@ -69,6 +69,7 @@ resource "aws_instance" "mongo" {
   tags = {
     Name = "MongoDB VM rebuild"
   }
+}
 
   # Install outdated MongoDB 3.6 on startup
   user_data = <<-EOF
