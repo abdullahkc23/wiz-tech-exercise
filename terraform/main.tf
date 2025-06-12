@@ -54,8 +54,6 @@ resource "aws_instance" "mongo" {
 resource "aws_s3_bucket" "public_backups" {
   bucket = "wiz-backups-${random_id.bucket_id.hex}"
 
-  acl    = "public-read"
-
   website {
     index_document = "index.html"
   }
@@ -64,6 +62,4 @@ resource "aws_s3_bucket" "public_backups" {
 resource "random_id" "bucket_id" {
   byte_length = 4
 }
-
-# Triggering apply
 
