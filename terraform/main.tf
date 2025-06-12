@@ -36,6 +36,27 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
+resource "aws_security_group" "ssh_access" {
+  name        = "ssh_access"
+  description = "Allow SSH access"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    description = "SSH from my IP"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"] # Insecure
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
 # Launch an EC2 instance with outdated Ubuntu 16.04 and install outdated MongoDB
 resource "aws_instance" "mongo" {
   ami           = "ami-0ddda618e961f2270" # Ubuntu 16.04 LTS (outdated)
@@ -43,6 +64,7 @@ resource "aws_instance" "mongo" {
   subnet_id     = aws_subnet.public.id
   key_name      = "wiz-key" # Ensure this key exists in the AWS console
   associate_public_ip_address = true
+  vpc_security_group_ids = [aws_security_group.ssh_access.id]
 
   tags = {
     Name = "MongoDB VM"
