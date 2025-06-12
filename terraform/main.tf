@@ -36,6 +36,7 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
+# Create a security group allowing SSH access
 resource "aws_security_group" "ssh_access" {
   name        = "ssh_access"
   description = "Allow SSH access"
@@ -46,7 +47,7 @@ resource "aws_security_group" "ssh_access" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # Insecure
+    cidr_blocks = ["0.0.0.0/0"] # Insecure: open to the world
   }
 
   egress {
@@ -57,44 +58,39 @@ resource "aws_security_group" "ssh_access" {
   }
 }
 
-# Launch an EC2 instance with outdated Ubuntu 16.04 and install outdated MongoDB
+# Launch an EC2 instance with Ubuntu 16.04 and MongoDB 3.6.23
 resource "aws_instance" "mongo" {
-  ami           = "ami-0ddda618e961f2270" # Ubuntu 16.04 LTS (outdated)
-  instance_type = "t2.micro"
-  subnet_id     = aws_subnet.public.id
-  key_name      = "wiz-key" # Ensure this key exists in the AWS console
+  ami                         = "ami-0ddda618e961f2270" # Ubuntu 16.04 (outdated)
+  instance_type               = "t2.micro"
+  subnet_id                   = aws_subnet.public.id
+  key_name                    = "wiz-key"
   associate_public_ip_address = true
-  vpc_security_group_ids = [aws_security_group.ssh_access.id]
+  vpc_security_group_ids      = [aws_security_group.ssh_access.id]
 
   tags = {
     Name = "MongoDB VM rebuild"
   }
-}
 
-  # Install outdated MongoDB 3.6 on startup
   user_data = <<-EOF
               #!/bin/bash
-              exec > /var/log/user-data.log 2>&1  # Log user data output
+              exec > /var/log/user-data.log 2>&1
               set -e
 
-              # Update package lists and install prerequisites
               apt-get update
               apt-get install -y gnupg wget curl
 
-              # Add MongoDB 3.6 repo and key
               wget -qO - https://www.mongodb.org/static/pgp/server-3.6.asc | apt-key add -
               echo "deb [ arch=amd64 ] https://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.6 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-3.6.list
 
-              # Install MongoDB 3.6
               apt-get update
               apt-get install -y mongodb-org=3.6.23 mongodb-org-server=3.6.23 mongodb-org-shell=3.6.23 mongodb-org-mongos=3.6.23 mongodb-org-tools=3.6.23
 
-              # Start and enable mongod
               systemctl start mongod
               systemctl enable mongod
               EOF
+}
 
-# Create an S3 bucket for backups with a public website configuration (deprecated)
+# Create a public S3 bucket (deprecated practice)
 resource "aws_s3_bucket" "public_backups" {
   bucket = "wiz-backups-${random_id.bucket_id.hex}"
 
@@ -103,8 +99,7 @@ resource "aws_s3_bucket" "public_backups" {
   }
 }
 
-# Random suffix to make the S3 bucket name globally unique
+# Random suffix to make the bucket name globally unique
 resource "random_id" "bucket_id" {
   byte_length = 4
 }
-
