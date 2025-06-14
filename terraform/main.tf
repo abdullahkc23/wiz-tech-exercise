@@ -2,12 +2,26 @@ provider "aws" {
   region = var.aws_region
 }
 
-# Create a VPC with a 10.0.0.0/16 CIDR block
+# Dynamically get Ubuntu 16.04 AMI
+data "aws_ami" "xenial" {
+  most_recent = true
+  owners      = ["099720109477"] # Canonical
+
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd/ubuntu-xenial-16.04-amd64-server-*"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
 resource "aws_vpc" "main" {
   cidr_block = "10.0.0.0/16"
 }
 
-# Create a public subnet in us-east-2a
 resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = "10.0.1.0/24"
@@ -15,12 +29,10 @@ resource "aws_subnet" "public" {
   availability_zone       = "us-east-2a"
 }
 
-# Create an internet gateway to allow external access
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
 }
 
-# Create a route table that routes traffic to the internet gateway
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
 
@@ -30,24 +42,21 @@ resource "aws_route_table" "public" {
   }
 }
 
-# Associate the public subnet with the route table
 resource "aws_route_table_association" "public" {
   subnet_id      = aws_subnet.public.id
   route_table_id = aws_route_table.public.id
 }
 
-# Create a security group allowing SSH access
 resource "aws_security_group" "ssh_access" {
   name        = "ssh_access"
   description = "Allow SSH access"
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    description = "SSH from my IP"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # Insecure: open to the world
+    cidr_blocks = ["0.0.0.0/0"] # Open to world (insecure)
   }
 
   egress {
@@ -58,9 +67,9 @@ resource "aws_security_group" "ssh_access" {
   }
 }
 
-# Launch an EC2 instance with Ubuntu 16.04 and MongoDB 3.6.23
+# Launch EC2 with outdated Ubuntu and MongoDB
 resource "aws_instance" "mongo" {
-  ami                         = "ami-0d8f6eb4f641ef691"  # Ubuntu Server 16.04 (outdated)
+  ami                         = data.aws_ami.xenial.id
   instance_type               = "t2.micro"
   subnet_id                   = aws_subnet.public.id
   key_name                    = "wiz-key"
@@ -90,16 +99,11 @@ resource "aws_instance" "mongo" {
               EOF
 }
 
-# Create a public S3 bucket (deprecated practice)
+# Public S3 bucket for backups (intentional misconfiguration)
 resource "aws_s3_bucket" "public_backups" {
   bucket = "wiz-backups-${random_id.bucket_id.hex}"
-
-  website {
-    index_document = "index.html"
-  }
 }
 
-# Random suffix to make the bucket name globally unique
 resource "random_id" "bucket_id" {
   byte_length = 4
 }
