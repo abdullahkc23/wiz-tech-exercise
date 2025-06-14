@@ -60,7 +60,7 @@ resource "aws_security_group" "ssh_access" {
 
 # Launch an EC2 instance with Ubuntu 16.04 and MongoDB 3.6.23
 resource "aws_instance" "mongo" {
-  ami                         = "ami-0ddda618e961f2270" # Ubuntu 16.04 (outdated)
+  ami                         = "ami-0d8f6eb4f641ef691"  # Ubuntu Server 16.04 (outdated)
   instance_type               = "t2.micro"
   subnet_id                   = aws_subnet.public.id
   key_name                    = "wiz-key"
