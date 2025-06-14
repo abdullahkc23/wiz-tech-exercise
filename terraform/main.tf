@@ -1,27 +1,14 @@
+# Set AWS provider region
 provider "aws" {
   region = var.aws_region
 }
 
-# Dynamically get Ubuntu 16.04 AMI
-data "aws_ami" "xenial" {
-  most_recent = true
-  owners      = ["099720109477"] # Canonical
-
-  filter {
-    name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-xenial-16.04-amd64-server-*"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
-}
-
+# Create a VPC with CIDR block 10.0.0.0/16
 resource "aws_vpc" "main" {
   cidr_block = "10.0.0.0/16"
 }
 
+# Public subnet in availability zone us-east-2a
 resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = "10.0.1.0/24"
@@ -29,10 +16,12 @@ resource "aws_subnet" "public" {
   availability_zone       = "us-east-2a"
 }
 
+# Internet Gateway for public access
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
 }
 
+# Route table to send internet-bound traffic to IGW
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
 
@@ -42,11 +31,13 @@ resource "aws_route_table" "public" {
   }
 }
 
+# Associate the public subnet with the route table
 resource "aws_route_table_association" "public" {
   subnet_id      = aws_subnet.public.id
   route_table_id = aws_route_table.public.id
 }
 
+# Security group to allow SSH access (insecure: open to the world)
 resource "aws_security_group" "ssh_access" {
   name        = "ssh_access"
   description = "Allow SSH access"
@@ -56,7 +47,7 @@ resource "aws_security_group" "ssh_access" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # Open to world (insecure)
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
@@ -67,12 +58,12 @@ resource "aws_security_group" "ssh_access" {
   }
 }
 
-# Launch EC2 with outdated Ubuntu and MongoDB
+# EC2 instance running Ubuntu 16.04 with MongoDB 3.6.23
 resource "aws_instance" "mongo" {
-  ami                         = data.aws_ami.xenial.id
+  ami                         = "ami-05803413c51f242b7" # Hardcoded Ubuntu 16.04 AMI
   instance_type               = "t2.micro"
   subnet_id                   = aws_subnet.public.id
-  key_name                    = "wiz-key"
+  key_name                    = "wiz-key" # Ensure this key pair exists
   associate_public_ip_address = true
   vpc_security_group_ids      = [aws_security_group.ssh_access.id]
 
@@ -99,11 +90,12 @@ resource "aws_instance" "mongo" {
               EOF
 }
 
-# Public S3 bucket for backups (intentional misconfiguration)
+# Insecure public S3 bucket for database backups (intentionally misconfigured)
 resource "aws_s3_bucket" "public_backups" {
   bucket = "wiz-backups-${random_id.bucket_id.hex}"
 }
 
+# Generate unique suffix for S3 bucket
 resource "random_id" "bucket_id" {
   byte_length = 4
 }
