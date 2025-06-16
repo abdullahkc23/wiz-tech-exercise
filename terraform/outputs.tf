@@ -17,3 +17,4 @@ output "mongodb_status_url" {
   description = "Public URL to check MongoDB version and backup timestamp"
   value       = "http://${aws_instance.mongo.public_ip}/status.txt"
 }
+
