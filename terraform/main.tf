@@ -4,12 +4,12 @@ provider "aws" {
 
 # --- VPC Networking ---
 
-# Create a VPC with a 10.0.0.0/16 CIDR block
+# Create a VPC
 resource "aws_vpc" "main" {
   cidr_block = "10.0.0.0/16"
 }
 
-# Create a public subnet in us-east-2a
+# Create a public subnet
 resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = "10.0.1.0/24"
@@ -17,12 +17,12 @@ resource "aws_subnet" "public" {
   availability_zone       = "us-east-2a"
 }
 
-# Create an internet gateway to allow external access
+# Create an internet gateway
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
 }
 
-# Create a route table that routes traffic to the internet gateway
+# Route table for internet access
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
 
@@ -32,15 +32,14 @@ resource "aws_route_table" "public" {
   }
 }
 
-# Associate the public subnet with the route table
+# Associate the subnet with the route table
 resource "aws_route_table_association" "public" {
   subnet_id      = aws_subnet.public.id
   route_table_id = aws_route_table.public.id
 }
 
-# --- Security Groups ---
+# --- Security Group for SSH ---
 
-# Create a security group allowing SSH access from anywhere (insecure)
 resource "aws_security_group" "ssh_access" {
   name        = "ssh_access"
   description = "Allow SSH access"
@@ -50,7 +49,7 @@ resource "aws_security_group" "ssh_access" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # Open to world (insecure)
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
@@ -64,7 +63,7 @@ resource "aws_security_group" "ssh_access" {
 # --- EC2 Instance with Outdated MongoDB ---
 
 resource "aws_instance" "mongo" {
-  ami                         = "ami-05803413c51f242b7" # Ubuntu 16.04 AMI (Ohio)
+  ami                         = "ami-05803413c51f242b7" # Ubuntu 16.04 LTS in us-east-2
   instance_type               = "t2.micro"
   subnet_id                   = aws_subnet.public.id
   key_name                    = "wiz-key"
@@ -75,7 +74,6 @@ resource "aws_instance" "mongo" {
     Name = "MongoDB VM"
   }
 
-  # Install outdated MongoDB 3.6.23 on outdated Ubuntu 16.04
   user_data = <<-EOF
               #!/bin/bash
               exec > /var/log/user-data.log 2>&1
@@ -95,36 +93,40 @@ resource "aws_instance" "mongo" {
               EOF
 }
 
-# --- Public S3 Bucket (Intentionally Misconfigured) ---
+# --- Public S3 Bucket with Intentional Misconfig ---
 
-# Generate random suffix to make bucket name unique
+# Random ID for unique bucket name
 resource "random_id" "bucket_id" {
   byte_length = 4
 }
 
-# S3 bucket with public access settings (deprecated config for exercise)
+# Create S3 bucket
 resource "aws_s3_bucket" "public_backups" {
-  bucket = "wiz-backups-${random_id.bucket_id.hex}"
+  bucket        = "wiz-backups-${random_id.bucket_id.hex}"
+  force_destroy = true
+}
 
-  # Insecure: disable default block public access settings
+# Allow public access by disabling block settings
+resource "aws_s3_bucket_public_access_block" "public_access" {
+  bucket                  = aws_s3_bucket.public_backups.id
   block_public_acls       = false
   block_public_policy     = false
   ignore_public_acls      = false
   restrict_public_buckets = false
 }
 
-# Add a public-read bucket policy instead of ACLs
+# Apply public-read access via policy
 resource "aws_s3_bucket_policy" "public_policy" {
   bucket = aws_s3_bucket.public_backups.id
 
   policy = jsonencode({
-    Version = "2012-10-17"
+    Version = "2012-10-17",
     Statement = [
       {
-        Sid       = "PublicReadGetObject"
-        Effect    = "Allow"
-        Principal = "*"
-        Action    = "s3:GetObject"
+        Sid       = "PublicRead",
+        Effect    = "Allow",
+        Principal = "*",
+        Action    = "s3:GetObject",
         Resource  = "${aws_s3_bucket.public_backups.arn}/*"
       }
     ]
