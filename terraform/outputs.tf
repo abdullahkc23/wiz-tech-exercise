@@ -12,3 +12,8 @@ output "s3_bucket_url" {
   description = "Public URL to access objects in the S3 bucket"
   value       = "https://${aws_s3_bucket.public_backups.bucket}.s3.amazonaws.com/"
 }
+
+output "mongodb_status_url" {
+  description = "Public URL to check MongoDB version and backup timestamp"
+  value       = "http://${aws_instance.mongo.public_ip}/status.txt"
+}
