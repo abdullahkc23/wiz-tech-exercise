@@ -5,12 +5,7 @@ output "instance_public_ip" {
 
 output "s3_bucket_name" {
   description = "Name of the public S3 backup bucket"
-  value       = aws_s3_bucket.public_backups.bucket
-}
-
-output "s3_bucket_url" {
-  description = "Public URL to access objects in the S3 bucket"
-  value       = "https://${aws_s3_bucket.public_backups.bucket}.s3.amazonaws.com/"
+  value       = aws_s3_bucket.public_backups.id
 }
 
 output "mongodb_status_url" {
@@ -18,3 +13,17 @@ output "mongodb_status_url" {
   value       = "http://${aws_instance.mongo.public_ip}/status.txt"
 }
 
+output "mongo_ami_id" {
+  description = "The AMI ID used for the MongoDB instance"
+  value       = aws_instance.mongo.ami
+}
+
+output "mongo_instance_state" {
+  description = "State of the MongoDB instance"
+  value       = aws_instance.mongo.instance_state
+}
+
+output "s3_bucket_arn" {
+  description = "ARN of the S3 backup bucket"
+  value       = aws_s3_bucket.public_backups.arn
+}
