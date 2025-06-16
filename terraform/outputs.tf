@@ -3,7 +3,12 @@ output "instance_public_ip" {
   value       = aws_instance.mongo.public_ip
 }
 
+output "s3_bucket_name" {
+  description = "Name of the public S3 backup bucket"
+  value       = aws_s3_bucket.public_backups.bucket
+}
+
 output "s3_bucket_url" {
-  description = "Public S3 backup bucket URL"
-  value       = aws_s3_bucket.public_backups.website_endpoint
+  description = "Public URL to access objects in the S3 bucket"
+  value       = "https://${aws_s3_bucket.public_backups.bucket}.s3.amazonaws.com/"
 }
