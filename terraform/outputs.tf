@@ -27,3 +27,7 @@ output "s3_bucket_arn" {
   description = "ARN of the S3 backup bucket"
   value       = aws_s3_bucket.public_backups.arn
 }
+
+output "mongo_version" {
+  value = "3.6.23"
+}
