@@ -149,19 +149,19 @@ resource "aws_s3_bucket_public_access_block" "public_access" {
 }
 
 # S3 is Public Read
-resource "aws_s3_bucket_policy" "public_policy" {
-  bucket = aws_s3_bucket.public_backups.id
+#resource "aws_s3_bucket_policy" "public_policy" {
+#  bucket = aws_s3_bucket.public_backups.id
 
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Sid       = "PublicRead",
-        Effect    = "Allow",
-        Principal = "*",
-        Action    = "s3:GetObject",
-        Resource  = "${aws_s3_bucket.public_backups.arn}/*"
-      }
-    ]
-  })
-}
+#  policy = jsonencode({
+#    Version = "2012-10-17",
+#    Statement = [
+#      {
+#        Sid       = "PublicRead",
+#        Effect    = "Allow",
+#        Principal = "*",
+#        Action    = "s3:GetObject",
+#        Resource  = "${aws_s3_bucket.public_backups.arn}/*"
+#      }
+#    ]
+#  })
+#}
