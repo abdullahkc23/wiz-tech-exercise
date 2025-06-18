@@ -137,7 +137,7 @@ resource "aws_instance" "mongo" {
               # Add HTTP health test file
               echo "Health Check OK" > /var/www/html/health.html
 EOF
-
+}
 
 # --- Public S3 Bucket with Intentional Misconfig ---
 
