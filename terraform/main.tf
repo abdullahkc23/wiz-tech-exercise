@@ -82,12 +82,12 @@ resource "aws_instance" "mongo" {
     Name = "MongoDB VM"
   }
 
-  user_data = <<-EOF
+    user_data = <<-EOF
               #!/bin/bash
               exec > /var/log/user-data.log 2>&1
               set -e
 
-              # Install required packages
+              # Install dependencies
               apt-get update
               apt-get install -y gnupg wget curl awscli apache2
 
@@ -100,6 +100,11 @@ resource "aws_instance" "mongo" {
               # Start MongoDB
               systemctl start mongod
               systemctl enable mongod
+
+              # Ensure status.txt always exists
+              echo "MongoDB Version:" > /var/www/html/status.txt
+              mongod --version | head -n 1 >> /var/www/html/status.txt
+              echo "Backup not yet run" >> /var/www/html/status.txt
 
               # Create backup script
               cat << 'EOL' > /opt/mongo_backup.sh
@@ -118,17 +123,13 @@ resource "aws_instance" "mongo" {
 
               chmod +x /opt/mongo_backup.sh
 
-              # Run backup script once
-              /opt/mongo_backup.sh
+              # Run immediately
+              /opt/mongo_backup.sh || echo "Initial backup failed" >> /var/www/html/status.txt
 
-              # Add to crontab hourly
+              # Set cron to run hourly
               echo "0 * * * * root /opt/mongo_backup.sh" >> /etc/crontab
 
-              # Serve status page
-              echo "<html><body><h1>MongoDB Backup Status</h1><pre>" > /var/www/html/index.html
-              cat /var/www/html/status.txt >> /var/www/html/index.html
-              echo "</pre></body></html>" >> /var/www/html/index.html
-
+              # Restart Apache to ensure it reads latest file
               systemctl restart apache2
               EOF
 }
