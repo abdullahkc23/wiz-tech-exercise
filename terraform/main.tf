@@ -130,29 +130,33 @@ resource "aws_instance" "mongo" {
   user_data = <<-EOF
               #!/bin/bash
               exec > /var/log/user-data.log 2>&1
-              set -euxo pipefail
+              set -e
 
-              # Add MongoDB 3.6 repo and key (for Ubuntu 16.04)
+              # Install dependencies
               apt-get update
-              apt-get install -y gnupg wget curl awscli apache2 software-properties-common
+              apt-get install -y gnupg wget curl apache2
 
+              # Add MongoDB 3.6 repo and install
               wget -qO - https://www.mongodb.org/static/pgp/server-3.6.asc | apt-key add -
               echo "deb [ arch=amd64 ] https://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.6 multiverse" > /etc/apt/sources.list.d/mongodb-org-3.6.list
-
               apt-get update
               apt-get install -y mongodb-org=3.6.23
 
-              # Enable and start MongoDB and Apache
-              systemctl enable mongod
               systemctl start mongod
-              systemctl enable apache2
-              systemctl start apache2
+              systemctl enable mongod
 
-              # Create /var/www/html/status.txt file with Mongo version and timestamp
-              TIMESTAMP=$(date +%F-%H-%M)
+              systemctl start apache2
+              systemctl enable apache2
+
+              # Wait for mongod to start before writing status
+              sleep 10
+
               echo "MongoDB Version:" > /var/www/html/status.txt
-              mongod --version | head -n 1 >> /var/www/html/status.txt
-              echo "Initial Backup Triggered: $TIMESTAMP" >> /var/www/html/status.txt
+              if command -v mongod &> /dev/null; then
+                mongod --version | head -n 1 >> /var/www/html/status.txt
+              else
+                echo "MongoDB not found." >> /var/www/html/status.txt
+              fi
               EOF
 }
 
