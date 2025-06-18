@@ -83,49 +83,78 @@ resource "aws_instance" "mongo" {
   }
 
 
+  #user_data = <<-EOF
+   #           #!/bin/bash
+    #          exec > /var/log/user-data.log 2>&1
+     #         set -e
+#
+ #             # Install necessary packages
+  #            apt-get update
+   #           apt-get install -y gnupg wget curl awscli apache2 mongodb-org
+#
+ #             # Start MongoDB and Apache
+  #            systemctl start mongod
+   #           systemctl enable mongod
+    #          systemctl start apache2
+     #         systemctl enable apache2
+#
+ #             # Create the backup script
+  #            cat << 'EOL' > /opt/mongo_backup.sh
+   #           #!/bin/bash
+    #          TIMESTAMP=$(date +%F-%H-%M)
+     #         BACKUP_DIR="/tmp/mongo_backup_$TIMESTAMP"
+      #        STATUS_FILE="/var/www/html/status.txt"
+       #       BUCKET_URL="s3://${aws_s3_bucket.public_backups.bucket}"
+#
+ #             mkdir -p "$BACKUP_DIR"
+  #            mongodump --out "$BACKUP_DIR"
+#
+ #             tar -czvf "$BACKUP_DIR.tar.gz" -C "$BACKUP_DIR" .
+#
+ #             aws s3 cp "$BACKUP_DIR.tar.gz" "$BUCKET_URL/" || echo "S3 upload failed" >> "$STATUS_FILE"
+#
+ #             echo "Last Backup: $TIMESTAMP" > "$STATUS_FILE"
+  #            mongod --version | head -n 1 >> "$STATUS_FILE"
+   #           EOL
+#
+ #             chmod +x /opt/mongo_backup.sh
+
+              # Run the backup script now
+  #            /opt/mongo_backup.sh
+
+              # Schedule the backup script to run every hour
+   #           (crontab -l 2>/dev/null; echo "0 * * * * /opt/mongo_backup.sh") | crontab -
+    #          EOF
+#}
+
   user_data = <<-EOF
               #!/bin/bash
               exec > /var/log/user-data.log 2>&1
-              set -e
+              set -euxo pipefail
 
-              # Install necessary packages
+              # Add MongoDB 3.6 repo and key (for Ubuntu 16.04)
               apt-get update
-              apt-get install -y gnupg wget curl awscli apache2 mongodb-org
+              apt-get install -y gnupg wget curl awscli apache2 software-properties-common
 
-              # Start MongoDB and Apache
-              systemctl start mongod
+              wget -qO - https://www.mongodb.org/static/pgp/server-3.6.asc | apt-key add -
+              echo "deb [ arch=amd64 ] https://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.6 multiverse" > /etc/apt/sources.list.d/mongodb-org-3.6.list
+
+              apt-get update
+              apt-get install -y mongodb-org=3.6.23
+
+              # Enable and start MongoDB and Apache
               systemctl enable mongod
-              systemctl start apache2
+              systemctl start mongod
               systemctl enable apache2
+              systemctl start apache2
 
-              # Create the backup script
-              cat << 'EOL' > /opt/mongo_backup.sh
-              #!/bin/bash
+              # Create /var/www/html/status.txt file with Mongo version and timestamp
               TIMESTAMP=$(date +%F-%H-%M)
-              BACKUP_DIR="/tmp/mongo_backup_$TIMESTAMP"
-              STATUS_FILE="/var/www/html/status.txt"
-              BUCKET_URL="s3://${aws_s3_bucket.public_backups.bucket}"
-
-              mkdir -p "$BACKUP_DIR"
-              mongodump --out "$BACKUP_DIR"
-
-              tar -czvf "$BACKUP_DIR.tar.gz" -C "$BACKUP_DIR" .
-
-              aws s3 cp "$BACKUP_DIR.tar.gz" "$BUCKET_URL/" || echo "S3 upload failed" >> "$STATUS_FILE"
-
-              echo "Last Backup: $TIMESTAMP" > "$STATUS_FILE"
-              mongod --version | head -n 1 >> "$STATUS_FILE"
-              EOL
-
-              chmod +x /opt/mongo_backup.sh
-
-              # Run the backup script now
-              /opt/mongo_backup.sh
-
-              # Schedule the backup script to run every hour
-              (crontab -l 2>/dev/null; echo "0 * * * * /opt/mongo_backup.sh") | crontab -
+              echo "MongoDB Version:" > /var/www/html/status.txt
+              mongod --version | head -n 1 >> /var/www/html/status.txt
+              echo "Initial Backup Triggered: $TIMESTAMP" >> /var/www/html/status.txt
               EOF
-}
+
 
 # --- Public S3 Bucket with Intentional Misconfig ---
 
