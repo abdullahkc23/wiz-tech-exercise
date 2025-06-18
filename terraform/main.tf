@@ -134,6 +134,7 @@ resource "aws_instance" "mongo" {
   key_name                    = "wiz-key"
   associate_public_ip_address = true
   vpc_security_group_ids      = [aws_security_group.ssh_access.id]
+  iam_instance_profile = aws_iam_instance_profile.ec2_instance_profile.name
 
   tags = {
     Name = "MongoDB VM"
