@@ -127,41 +127,55 @@ resource "aws_instance" "mongo" {
     #          EOF
 #}
 
-    user_data = <<-EOF
+  user_data = <<-EOF
               #!/bin/bash
               exec > /var/log/user-data.log 2>&1
-              set -x  # enable verbose output
+              set -x
 
-              # Update and install MongoDB 3.6 + Apache
+              # Install required packages
               apt-get update
-              apt-get install -y gnupg wget curl apache2
+              apt-get install -y gnupg wget curl apache2 awscli
 
-              # Add MongoDB GPG key and repo
+              # Add MongoDB 3.6
               wget -qO - https://www.mongodb.org/static/pgp/server-3.6.asc | apt-key add -
               echo "deb [ arch=amd64 ] https://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.6 multiverse" > /etc/apt/sources.list.d/mongodb-org-3.6.list
               apt-get update
               apt-get install -y mongodb-org=3.6.23
 
-              # Start services
               systemctl start mongod || true
               systemctl enable mongod || true
               systemctl start apache2
               systemctl enable apache2
 
-              # Ensure Apache has a test page
               echo "<html><body><h1>Apache OK</h1></body></html>" > /var/www/html/index.html
 
-              # Wait to ensure Mongo starts
               sleep 15
 
-              # Create status.txt file
-              {
-                echo "MongoDB Version:"
-                mongod --version | head -n 1 || echo "mongod version command failed"
-                echo "Timestamp: $(date)"
-              } > /var/www/html/status.txt
-              EOF
+              # Create backup script
+              cat << 'EOL' > /opt/mongo_backup.sh
+              #!/bin/bash
+              TIMESTAMP=$(date +%F-%H-%M)
+              BACKUP_DIR="/tmp/mongo_backup_$TIMESTAMP"
+              S3_BUCKET="s3://${aws_s3_bucket.public_backups.bucket}"
 
+              mkdir -p "$BACKUP_DIR"
+              mongodump --out "$BACKUP_DIR"
+
+              tar -czf "$BACKUP_DIR.tar.gz" -C "$BACKUP_DIR" .
+              aws s3 cp "$BACKUP_DIR.tar.gz" "$S3_BUCKET/"
+
+              echo "Last Backup: $TIMESTAMP" > /var/www/html/status.txt
+              mongod --version | head -n 1 >> /var/www/html/status.txt
+              EOL
+
+              chmod +x /opt/mongo_backup.sh
+
+              # Run immediately
+              /opt/mongo_backup.sh
+
+              # Set up hourly cron
+              echo "0 * * * * root /opt/mongo_backup.sh" >> /etc/crontab
+              EOF
 }
 
 # --- Public S3 Bucket with Intentional Misconfig ---
