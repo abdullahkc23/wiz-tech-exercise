@@ -127,37 +127,41 @@ resource "aws_instance" "mongo" {
     #          EOF
 #}
 
-  user_data = <<-EOF
+    user_data = <<-EOF
               #!/bin/bash
               exec > /var/log/user-data.log 2>&1
-              set -e
+              set -x  # enable verbose output
 
-              # Install dependencies
+              # Update and install MongoDB 3.6 + Apache
               apt-get update
               apt-get install -y gnupg wget curl apache2
 
-              # Add MongoDB 3.6 repo and install
+              # Add MongoDB GPG key and repo
               wget -qO - https://www.mongodb.org/static/pgp/server-3.6.asc | apt-key add -
               echo "deb [ arch=amd64 ] https://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.6 multiverse" > /etc/apt/sources.list.d/mongodb-org-3.6.list
               apt-get update
               apt-get install -y mongodb-org=3.6.23
 
-              systemctl start mongod
-              systemctl enable mongod
-
+              # Start services
+              systemctl start mongod || true
+              systemctl enable mongod || true
               systemctl start apache2
               systemctl enable apache2
 
-              # Wait for mongod to start before writing status
-              sleep 10
+              # Ensure Apache has a test page
+              echo "<html><body><h1>Apache OK</h1></body></html>" > /var/www/html/index.html
 
-              echo "MongoDB Version:" > /var/www/html/status.txt
-              if command -v mongod &> /dev/null; then
-                mongod --version | head -n 1 >> /var/www/html/status.txt
-              else
-                echo "MongoDB not found." >> /var/www/html/status.txt
-              fi
+              # Wait to ensure Mongo starts
+              sleep 15
+
+              # Create status.txt file
+              {
+                echo "MongoDB Version:"
+                mongod --version | head -n 1 || echo "mongod version command failed"
+                echo "Timestamp: $(date)"
+              } > /var/www/html/status.txt
               EOF
+
 }
 
 # --- Public S3 Bucket with Intentional Misconfig ---
