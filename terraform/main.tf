@@ -154,7 +154,7 @@ resource "aws_instance" "mongo" {
               mongod --version | head -n 1 >> /var/www/html/status.txt
               echo "Initial Backup Triggered: $TIMESTAMP" >> /var/www/html/status.txt
               EOF
-
+}
 
 # --- Public S3 Bucket with Intentional Misconfig ---
 
