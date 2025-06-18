@@ -68,6 +68,63 @@ resource "aws_security_group" "ssh_access" {
   }
 }
 
+# --- Adding S3 IAM permissions and attaching to the EC2 instance
+
+# IAM Role for EC2 Instance
+resource "aws_iam_role" "ec2_s3_role" {
+  name = "wiz-ec2-s3-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        },
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+# IAM Policy to Allow S3 Full Access (adjust to restrict if needed)
+resource "aws_iam_policy" "s3_backup_policy" {
+  name        = "wiz-s3-backup-policy"
+  description = "Policy to allow EC2 instance to write to S3 bucket"
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:ListBucket"
+        ],
+        Resource = [
+          "${aws_s3_bucket.public_backups.arn}",
+          "${aws_s3_bucket.public_backups.arn}/*"
+        ]
+      }
+    ]
+  })
+}
+
+# Attach the policy to the role
+resource "aws_iam_role_policy_attachment" "ec2_s3_attachment" {
+  role       = aws_iam_role.ec2_s3_role.name
+  policy_arn = aws_iam_policy.s3_backup_policy.arn
+}
+
+# Create IAM instance profile
+resource "aws_iam_instance_profile" "ec2_instance_profile" {
+  name = "wiz-ec2-instance-profile"
+  role = aws_iam_role.ec2_s3_role.name
+}
+
+
 # --- EC2 Instance with Outdated MongoDB ---
 
 resource "aws_instance" "mongo" {
@@ -81,51 +138,6 @@ resource "aws_instance" "mongo" {
   tags = {
     Name = "MongoDB VM"
   }
-
-
-  #user_data = <<-EOF
-   #           #!/bin/bash
-    #          exec > /var/log/user-data.log 2>&1
-     #         set -e
-#
- #             # Install necessary packages
-  #            apt-get update
-   #           apt-get install -y gnupg wget curl awscli apache2 mongodb-org
-#
- #             # Start MongoDB and Apache
-  #            systemctl start mongod
-   #           systemctl enable mongod
-    #          systemctl start apache2
-     #         systemctl enable apache2
-#
- #             # Create the backup script
-  #            cat << 'EOL' > /opt/mongo_backup.sh
-   #           #!/bin/bash
-    #          TIMESTAMP=$(date +%F-%H-%M)
-     #         BACKUP_DIR="/tmp/mongo_backup_$TIMESTAMP"
-      #        STATUS_FILE="/var/www/html/status.txt"
-       #       BUCKET_URL="s3://${aws_s3_bucket.public_backups.bucket}"
-#
- #             mkdir -p "$BACKUP_DIR"
-  #            mongodump --out "$BACKUP_DIR"
-#
- #             tar -czvf "$BACKUP_DIR.tar.gz" -C "$BACKUP_DIR" .
-#
- #             aws s3 cp "$BACKUP_DIR.tar.gz" "$BUCKET_URL/" || echo "S3 upload failed" >> "$STATUS_FILE"
-#
- #             echo "Last Backup: $TIMESTAMP" > "$STATUS_FILE"
-  #            mongod --version | head -n 1 >> "$STATUS_FILE"
-   #           EOL
-#
- #             chmod +x /opt/mongo_backup.sh
-
-              # Run the backup script now
-  #            /opt/mongo_backup.sh
-
-              # Schedule the backup script to run every hour
-   #           (crontab -l 2>/dev/null; echo "0 * * * * /opt/mongo_backup.sh") | crontab -
-    #          EOF
-#}
 
   user_data = <<-EOF
               #!/bin/bash
