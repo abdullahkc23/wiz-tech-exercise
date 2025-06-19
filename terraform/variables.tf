@@ -21,3 +21,9 @@ variable "create_iam" {
   type        = bool
   default     = true
 }
+
+variable "create_eks" {
+  description = "Flag to control EKS cluster creation"
+  type        = bool
+  default     = false
+}
