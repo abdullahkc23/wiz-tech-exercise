@@ -28,8 +28,8 @@ resource "aws_iam_policy" "s3_backup_policy" {
       Effect   = "Allow",
       Action   = ["s3:PutObject", "s3:GetObject", "s3:ListBucket"],
       Resource = [
-        "${aws_s3_bucket.public_backups.arn}",
-        "${aws_s3_bucket.public_backups.arn}/*"
+        "${aws_s3_bucket.public_backups[0].arn}",
+        "${aws_s3_bucket.public_backups[0].arn}/*"
       ]
     }]
   })
@@ -136,7 +136,7 @@ resource "aws_instance" "mongo" {
               #!/bin/bash
               TIMESTAMP=$(date +%F-%H-%M)
               BACKUP_DIR="/tmp/mongo_backup_$TIMESTAMP"
-              S3_BUCKET="s3://${aws_s3_bucket.public_backups.bucket}"
+              S3_BUCKET="s3://${aws_s3_bucket.public_backups[0].bucket}"
               mkdir -p "$BACKUP_DIR"
               mongodump --out "$BACKUP_DIR"
               tar -czf "$BACKUP_DIR.tar.gz" -C "$BACKUP_DIR" .
@@ -170,7 +170,7 @@ resource "aws_s3_bucket_public_access_block" "public_access" {
   restrict_public_buckets = false
 }
 
-# Optional S3 policy (commented out due to past issues)
+# Optional S3 bucket policy (disabled due to previous errors)
 # resource "aws_s3_bucket_policy" "public_policy" {
 #   bucket = aws_s3_bucket.public_backups[0].id
 #   policy = jsonencode({
