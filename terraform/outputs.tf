@@ -1,33 +1,44 @@
 output "instance_public_ip" {
   description = "Public IP of the MongoDB instance"
-  value       = aws_instance.mongo.public_ip
+  value       = var.create_ec2 ? aws_instance.mongo.public_ip : null
 }
 
 output "s3_bucket_name" {
   description = "Name of the public S3 backup bucket"
-  value       = aws_s3_bucket.public_backups.id
+  value       = var.create_s3 ? aws_s3_bucket.public_backups.id : null
 }
 
 output "mongodb_status_url" {
   description = "Public URL to check MongoDB version and backup timestamp"
-  value       = "http://${aws_instance.mongo.public_ip}/status.txt"
+  value       = var.create_ec2 ? "http://${aws_instance.mongo.public_ip}/status.txt" : null
 }
 
 output "mongo_ami_id" {
   description = "The AMI ID used for the MongoDB instance"
-  value       = aws_instance.mongo.ami
+  value       = var.create_ec2 ? aws_instance.mongo.ami : null
 }
 
 output "mongo_instance_state" {
   description = "State of the MongoDB instance"
-  value       = aws_instance.mongo.instance_state
+  value       = var.create_ec2 ? aws_instance.mongo.instance_state : null
 }
 
 output "s3_bucket_arn" {
   description = "ARN of the S3 backup bucket"
-  value       = aws_s3_bucket.public_backups.arn
+  value       = var.create_s3 ? aws_s3_bucket.public_backups.arn : null
 }
 
 output "mongo_version" {
-  value = "3.6.23"
+  description = "Installed MongoDB version"
+  value       = "3.6.23"
+}
+
+# Expose the most recent backup file in S3
+output "latest_backup_file" {
+  description = "Latest MongoDB backup file in S3"
+  value       = (
+    var.create_s3 && length(data.aws_s3_bucket_object.latest_backup.*.key) > 0
+    ? data.aws_s3_bucket_object.latest_backup[0].key
+    : "No backups found"
+  )
 }
