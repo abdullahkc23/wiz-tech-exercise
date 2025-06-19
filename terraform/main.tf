@@ -72,7 +72,7 @@ resource "aws_security_group" "ssh_access" {
 
 # IAM Role for EC2 Instance
 resource "aws_iam_role" "ec2_s3_role" {
-  name = "wiz-ec2-s3-role-v2"
+  name = "wiz-ec2-s3-role-v3"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -90,7 +90,7 @@ resource "aws_iam_role" "ec2_s3_role" {
 
 # IAM Policy to Allow S3 Full Access (adjust to restrict if needed)
 resource "aws_iam_policy" "s3_backup_policy" {
-  name        = "wiz-s3-backup-policy-v2"
+  name        = "wiz-s3-backup-policy-v3"
   description = "Policy to allow EC2 instance to write to S3 bucket"
 
   policy = jsonencode({
@@ -120,7 +120,7 @@ resource "aws_iam_role_policy_attachment" "ec2_s3_attachment" {
 
 # Create IAM instance profile
 resource "aws_iam_instance_profile" "ec2_instance_profile" {
-  name = "wiz-ec2-instance-profile-v2"
+  name = "wiz-ec2-instance-profile-v3"
   role = aws_iam_role.ec2_s3_role.name
 }
 
