@@ -2,14 +2,56 @@ provider "aws" {
   region = var.aws_region
 }
 
-# --- VPC Networking ---
+# --- Conditional IAM Role & Policy ---
+resource "aws_iam_role" "ec2_s3_role" {
+  count = var.create_iam ? 1 : 0
+  name  = "wiz-ec2-s3-role-v5"
 
-# Create a VPC
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect = "Allow",
+      Principal = { Service = "ec2.amazonaws.com" },
+      Action   = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_policy" "s3_backup_policy" {
+  count       = var.create_iam ? 1 : 0
+  name        = "wiz-s3-backup-policy-v5"
+  description = "EC2 to S3 access policy"
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect   = "Allow",
+      Action   = ["s3:PutObject", "s3:GetObject", "s3:ListBucket"],
+      Resource = [
+        "${aws_s3_bucket.public_backups.arn}",
+        "${aws_s3_bucket.public_backups.arn}/*"
+      ]
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ec2_s3_attachment" {
+  count      = var.create_iam ? 1 : 0
+  role       = aws_iam_role.ec2_s3_role[0].name
+  policy_arn = aws_iam_policy.s3_backup_policy[0].arn
+}
+
+resource "aws_iam_instance_profile" "ec2_instance_profile" {
+  count = var.create_iam ? 1 : 0
+  name  = "wiz-ec2-instance-profile-v5"
+  role  = aws_iam_role.ec2_s3_role[0].name
+}
+
+# --- VPC, Subnet, Route, SG ---
 resource "aws_vpc" "main" {
   cidr_block = "10.0.0.0/16"
 }
 
-# Create a public subnet
 resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = "10.0.1.0/24"
@@ -17,28 +59,22 @@ resource "aws_subnet" "public" {
   availability_zone       = "us-east-2a"
 }
 
-# Create an internet gateway
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
 }
 
-# Route table for internet access
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
-
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.igw.id
   }
 }
 
-# Associate the subnet with the route table
 resource "aws_route_table_association" "public" {
   subnet_id      = aws_subnet.public.id
   route_table_id = aws_route_table.public.id
 }
-
-# --- Security Group for SSH ---
 
 resource "aws_security_group" "ssh_access" {
   name        = "ssh_access"
@@ -53,7 +89,6 @@ resource "aws_security_group" "ssh_access" {
   }
 
   ingress {
-    description = "Allow HTTP"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
@@ -68,166 +103,84 @@ resource "aws_security_group" "ssh_access" {
   }
 }
 
-# --- Adding S3 IAM permissions and attaching to the EC2 instance
-
-# IAM Role for EC2 Instance
-resource "aws_iam_role" "ec2_s3_role" {
-  name = "wiz-ec2-s3-role-v4"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Effect = "Allow",
-        Principal = {
-          Service = "ec2.amazonaws.com"
-        },
-        Action = "sts:AssumeRole"
-      }
-    ]
-  })
-}
-
-# IAM Policy to Allow S3 Full Access (adjust to restrict if needed)
-resource "aws_iam_policy" "s3_backup_policy" {
-  name        = "wiz-s3-backup-policy-v4"
-  description = "Policy to allow EC2 instance to write to S3 bucket"
-
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Effect = "Allow",
-        Action = [
-          "s3:PutObject",
-          "s3:GetObject",
-          "s3:ListBucket"
-        ],
-        Resource = [
-          "${aws_s3_bucket.public_backups.arn}",
-          "${aws_s3_bucket.public_backups.arn}/*"
-        ]
-      }
-    ]
-  })
-}
-
-# Attach the policy to the role
-resource "aws_iam_role_policy_attachment" "ec2_s3_attachment" {
-  role       = aws_iam_role.ec2_s3_role.name
-  policy_arn = aws_iam_policy.s3_backup_policy.arn
-}
-
-# Create IAM instance profile
-resource "aws_iam_instance_profile" "ec2_instance_profile" {
-  name = "wiz-ec2-instance-profile-v4"
-  role = aws_iam_role.ec2_s3_role.name
-}
-
-
-# --- EC2 Instance with Outdated MongoDB ---
-
+# --- EC2 Instance (Conditional) ---
 resource "aws_instance" "mongo" {
-  ami                         = "ami-05803413c51f242b7" # Ubuntu 16.04 LTS in us-east-2
+  count                       = var.create_ec2 ? 1 : 0
+  ami                         = "ami-05803413c51f242b7"
   instance_type               = "t2.micro"
   subnet_id                   = aws_subnet.public.id
   key_name                    = "wiz-key"
   associate_public_ip_address = true
   vpc_security_group_ids      = [aws_security_group.ssh_access.id]
-  iam_instance_profile = aws_iam_instance_profile.ec2_instance_profile.name
+  iam_instance_profile        = var.create_iam ? aws_iam_instance_profile.ec2_instance_profile[0].name : null
 
-  tags = {
-    Name = "MongoDB VM"
-  }
+  tags = { Name = "MongoDB VM" }
 
   user_data = <<-EOF
               #!/bin/bash
               exec > /var/log/user-data.log 2>&1
               set -x
-
-              # Install required packages
               apt-get update
               apt-get install -y gnupg wget curl apache2 awscli
-
-              # Add MongoDB 3.6
               wget -qO - https://www.mongodb.org/static/pgp/server-3.6.asc | apt-key add -
               echo "deb [ arch=amd64 ] https://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.6 multiverse" > /etc/apt/sources.list.d/mongodb-org-3.6.list
               apt-get update
               apt-get install -y mongodb-org=3.6.23
-
               systemctl start mongod || true
               systemctl enable mongod || true
               systemctl start apache2
               systemctl enable apache2
-
               echo "<html><body><h1>Apache OK</h1></body></html>" > /var/www/html/index.html
-
               sleep 15
-
-              # Create backup script
               cat << 'EOL' > /opt/mongo_backup.sh
               #!/bin/bash
               TIMESTAMP=$(date +%F-%H-%M)
               BACKUP_DIR="/tmp/mongo_backup_$TIMESTAMP"
               S3_BUCKET="s3://${aws_s3_bucket.public_backups.bucket}"
-
               mkdir -p "$BACKUP_DIR"
               mongodump --out "$BACKUP_DIR"
-
               tar -czf "$BACKUP_DIR.tar.gz" -C "$BACKUP_DIR" .
               aws s3 cp "$BACKUP_DIR.tar.gz" "$S3_BUCKET/"
-
               echo "Last Backup: $TIMESTAMP" > /var/www/html/status.txt
               mongod --version | head -n 1 >> /var/www/html/status.txt
               EOL
-
               chmod +x /opt/mongo_backup.sh
-
-              # Run immediately
               /opt/mongo_backup.sh
-
-              # Set up hourly cron
               echo "0 * * * * root /opt/mongo_backup.sh" >> /etc/crontab
               EOF
 }
 
-# --- Public S3 Bucket with Intentional Misconfig ---
-
-# Random ID for unique bucket name
+# --- S3 Bucket (Conditional) ---
 resource "random_id" "bucket_id" {
   byte_length = 4
 }
 
-# Create S3 bucket
 resource "aws_s3_bucket" "public_backups" {
+  count         = var.create_s3 ? 1 : 0
   bucket        = "wiz-backups-${random_id.bucket_id.hex}"
   force_destroy = true
 }
 
-# Allow public access by disabling block settings
 resource "aws_s3_bucket_public_access_block" "public_access" {
-  bucket                  = aws_s3_bucket.public_backups.id
+  count                   = var.create_s3 ? 1 : 0
+  bucket                  = aws_s3_bucket.public_backups[0].id
   block_public_acls       = false
   block_public_policy     = false
   ignore_public_acls      = false
   restrict_public_buckets = false
 }
 
-# S3 is Public Read
-#resource "aws_s3_bucket_policy" "public_policy" {
-#  bucket = aws_s3_bucket.public_backups.id
-
-#  policy = jsonencode({
-#    Version = "2012-10-17",
-#    Statement = [
-#      {
-#        Sid       = "PublicRead",
-#        Effect    = "Allow",
-#        Principal = "*",
-#        Action    = "s3:GetObject",
-#        Resource  = "${aws_s3_bucket.public_backups.arn}/*"
-#      }
-#    ]
-#  })
-#}
-
+# Optional S3 policy (commented out due to past issues)
+# resource "aws_s3_bucket_policy" "public_policy" {
+#   bucket = aws_s3_bucket.public_backups[0].id
+#   policy = jsonencode({
+#     Version = "2012-10-17",
+#     Statement = [{
+#       Sid       = "PublicRead",
+#       Effect    = "Allow",
+#       Principal = "*",
+#       Action    = "s3:GetObject",
+#       Resource  = "${aws_s3_bucket.public_backups[0].arn}/*"
+#     }]
+#   })
+# }
