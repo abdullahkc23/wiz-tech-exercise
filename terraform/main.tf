@@ -135,7 +135,7 @@ resource "aws_instance" "mongo" {
   count                       = var.create_ec2 ? 1 : 0
   ami                         = "ami-05803413c51f242b7"
   instance_type               = "t2.micro"
-  subnet_id                   = aws_subnet.public.id
+  subnet_id                   = aws_subnet.public_a.id
   key_name                    = "wiz-key"
   associate_public_ip_address = true
   vpc_security_group_ids      = [aws_security_group.ssh_access.id]
