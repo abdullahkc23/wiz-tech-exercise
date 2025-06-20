@@ -33,6 +33,12 @@ output "mongo_version" {
   value       = "3.6.23"
 }
 
+output "ecr_repo_url" {
+  description = "ECR repository URL for Tasky"
+  value       = aws_ecr_repository.tasky_repo.repository_url
+}
+
+
 # Uncomment this section only if you add the corresponding data block
 # output "latest_backup_file" {
 #   description = "Latest MongoDB backup file in S3"
