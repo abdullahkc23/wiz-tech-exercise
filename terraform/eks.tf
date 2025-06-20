@@ -76,7 +76,7 @@ resource "aws_eks_node_group" "wiz_nodes" {
   cluster_name    = aws_eks_cluster.wiz_eks[0].name
   node_group_name = "wiz-eks-nodes-v3"
   node_role_arn   = aws_iam_role.eks_node_role[0].arn
-  subnet_ids      = [aws_subnet.public.id]
+  subnet_ids      = [aws_subnet.public_a.id]
 
   scaling_config {
     desired_size = 1
