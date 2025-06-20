@@ -5,7 +5,7 @@ provider "aws" {
 # --- Conditional IAM Role & Policy ---
 resource "aws_iam_role" "ec2_s3_role" {
   count = var.create_iam ? 1 : 0
-  name  = "wiz-ec2-s3-role-v6"
+  name  = "wiz-ec2-s3-role-v7"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -19,7 +19,7 @@ resource "aws_iam_role" "ec2_s3_role" {
 
 resource "aws_iam_policy" "s3_backup_policy" {
   count       = var.create_iam ? 1 : 0
-  name        = "wiz-s3-backup-policy-v6"
+  name        = "wiz-s3-backup-policy-v7"
   description = "EC2 to S3 access policy"
 
   policy = jsonencode({
@@ -43,7 +43,7 @@ resource "aws_iam_role_policy_attachment" "ec2_s3_attachment" {
 
 resource "aws_iam_instance_profile" "ec2_instance_profile" {
   count = var.create_iam ? 1 : 0
-  name  = "wiz-ec2-instance-profile-v6"
+  name  = "wiz-ec2-instance-profile-v7"
   role  = aws_iam_role.ec2_s3_role[0].name
 }
 
