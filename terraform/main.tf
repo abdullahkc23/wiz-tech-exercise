@@ -5,7 +5,7 @@ provider "aws" {
 # --- Conditional IAM Role & Policy ---
 resource "aws_iam_role" "ec2_s3_role" {
   count = var.create_iam ? 1 : 0
-  name  = "wiz-ec2-s3-role-v12"
+  name  = "wiz-ec2-s3-role-v13"
 
   lifecycle {
     prevent_destroy = true
@@ -24,7 +24,7 @@ resource "aws_iam_role" "ec2_s3_role" {
 
 resource "aws_iam_policy" "s3_backup_policy" {
   count       = var.create_iam ? 1 : 0
-  name        = "wiz-s3-backup-policy-v12"
+  name        = "wiz-s3-backup-policy-v13"
   description = "EC2 to S3 access policy"
 
   lifecycle {
@@ -53,7 +53,7 @@ resource "aws_iam_role_policy_attachment" "ec2_s3_attachment" {
 
 resource "aws_iam_instance_profile" "ec2_instance_profile" {
   count = var.create_iam ? 1 : 0
-  name  = "wiz-ec2-instance-profile-v12"
+  name  = "wiz-ec2-instance-profile-v13"
   role  = aws_iam_role.ec2_s3_role[0].name
 
   lifecycle {
@@ -105,7 +105,7 @@ resource "aws_route_table_association" "public_b" {
 
 resource "aws_security_group" "ssh_access" {
   name        = "ssh_access"
-  description = "Allow SSH and HTTP access"
+  description = "Allow SSH, HTTP and MongoDB access"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -120,6 +120,13 @@ resource "aws_security_group" "ssh_access" {
     to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 27017
+    to_port     = 27017
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"] 
   }
 
   egress {
@@ -153,6 +160,7 @@ resource "aws_instance" "mongo" {
               echo "deb [ arch=amd64 ] https://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.6 multiverse" > /etc/apt/sources.list.d/mongodb-org-3.6.list
               apt-get update
               apt-get install -y mongodb-org=3.6.23
+              sed -i 's/bindIp: 127.0.0.1/bindIp: 0.0.0.0/' /etc/mongod.conf
               systemctl start mongod || true
               systemctl enable mongod || true
               systemctl start apache2
@@ -216,7 +224,7 @@ resource "aws_s3_bucket_public_access_block" "public_access" {
 # --- EKS IAM Role for Control Plane ---
 resource "aws_iam_role" "eks_cluster_role" {
   count = var.create_eks ? 1 : 0
-  name  = "wiz-eks-cluster-role-v5"
+  name  = "wiz-eks-cluster-role-v6"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -239,7 +247,7 @@ resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
 # --- EKS Cluster ---
 resource "aws_eks_cluster" "wiz_eks" {
   count    = var.create_eks ? 1 : 0
-  name     = "wiz-eks-cluster-v5"
+  name     = "wiz-eks-cluster-v6"
   version  = "1.29"
   role_arn = aws_iam_role.eks_cluster_role[0].arn
 
@@ -253,7 +261,7 @@ resource "aws_eks_cluster" "wiz_eks" {
 # --- EKS IAM Role for Worker Nodes ---
 resource "aws_iam_role" "eks_node_role" {
   count = var.create_eks ? 1 : 0
-  name  = "wiz-eks-node-role-v5"
+  name  = "wiz-eks-node-role-v6"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -289,7 +297,7 @@ resource "aws_iam_role_policy_attachment" "eks_registry_policy" {
 resource "aws_eks_node_group" "wiz_nodes" {
   count           = var.create_eks ? 1 : 0
   cluster_name    = aws_eks_cluster.wiz_eks[0].name
-  node_group_name = "wiz-eks-nodes-v5"
+  node_group_name = "wiz-eks-nodes-v6"
   node_role_arn   = aws_iam_role.eks_node_role[0].arn
   subnet_ids      = [aws_subnet.public_a.id]
 
