@@ -1,7 +1,7 @@
 # --- EKS IAM Role for Control Plane ---
 resource "aws_iam_role" "eks_cluster_role" {
   count = var.create_eks ? 1 : 0
-  name  = "wiz-eks-cluster-role-v2"
+  name  = "wiz-eks-cluster-role-v3"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -24,7 +24,7 @@ resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
 # --- EKS Cluster ---
 resource "aws_eks_cluster" "wiz_eks" {
   count    = var.create_eks ? 1 : 0
-  name     = "wiz-eks-cluster-v2"
+  name     = "wiz-eks-cluster-v3"
   version  = "1.29"
   role_arn = aws_iam_role.eks_cluster_role[0].arn
 
@@ -38,7 +38,7 @@ resource "aws_eks_cluster" "wiz_eks" {
 # --- EKS IAM Role for Worker Nodes ---
 resource "aws_iam_role" "eks_node_role" {
   count = var.create_eks ? 1 : 0
-  name  = "wiz-eks-node-role-v2"
+  name  = "wiz-eks-node-role-v3"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -74,7 +74,7 @@ resource "aws_iam_role_policy_attachment" "eks_registry_policy" {
 resource "aws_eks_node_group" "wiz_nodes" {
   count           = var.create_eks ? 1 : 0
   cluster_name    = aws_eks_cluster.wiz_eks[0].name
-  node_group_name = "wiz-eks-nodes-v2"
+  node_group_name = "wiz-eks-nodes-v3"
   node_role_arn   = aws_iam_role.eks_node_role[0].arn
   subnet_ids      = [aws_subnet.public.id]
 
