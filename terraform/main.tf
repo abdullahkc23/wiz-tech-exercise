@@ -2,10 +2,10 @@ provider "aws" {
   region = var.aws_region
 }
 
-# --- Conditional IAM Role & Policy ---
+# --- IAM Role & Policy ---
 resource "aws_iam_role" "ec2_s3_role" {
   count = var.create_iam ? 1 : 0
-  name  = "wiz-ec2-s3-role-v13"
+  name  = "wiz-ec2-s3-role-v14"
 
   lifecycle {
     prevent_destroy = true
@@ -24,7 +24,7 @@ resource "aws_iam_role" "ec2_s3_role" {
 
 resource "aws_iam_policy" "s3_backup_policy" {
   count       = var.create_iam ? 1 : 0
-  name        = "wiz-s3-backup-policy-v13"
+  name        = "wiz-s3-backup-policy-v14"
   description = "EC2 to S3 access policy"
 
   lifecycle {
@@ -53,7 +53,7 @@ resource "aws_iam_role_policy_attachment" "ec2_s3_attachment" {
 
 resource "aws_iam_instance_profile" "ec2_instance_profile" {
   count = var.create_iam ? 1 : 0
-  name  = "wiz-ec2-instance-profile-v13"
+  name  = "wiz-ec2-instance-profile-v14"
   role  = aws_iam_role.ec2_s3_role[0].name
 
   lifecycle {
@@ -137,7 +137,7 @@ resource "aws_security_group" "ssh_access" {
   }
 }
 
-# --- EC2 Instance (Conditional) ---
+# --- EC2 Instance ---
 resource "aws_instance" "mongo" {
   count                       = var.create_ec2 ? 1 : 0
   ami                         = "ami-05803413c51f242b7"
@@ -185,7 +185,7 @@ resource "aws_instance" "mongo" {
               EOF
 }
 
-# --- S3 Bucket (Conditional) ---
+# --- S3 Bucket ---
 resource "random_id" "bucket_id" {
   byte_length = 4
 }
@@ -205,26 +205,11 @@ resource "aws_s3_bucket_public_access_block" "public_access" {
   restrict_public_buckets = false
 }
 
-# Optional S3 bucket policy (disabled due to previous errors)
-# resource "aws_s3_bucket_policy" "public_policy" {
-#   bucket = aws_s3_bucket.public_backups[0].id
-#   policy = jsonencode({
-#     Version = "2012-10-17",
-#     Statement = [{
-#       Sid       = "PublicRead",
-#       Effect    = "Allow",
-#       Principal = "*",
-#       Action    = "s3:GetObject",
-#       Resource  = "${aws_s3_bucket.public_backups[0].arn}/*"
-#     }]
-#   })
-# }
-
 
 # --- EKS IAM Role for Control Plane ---
 resource "aws_iam_role" "eks_cluster_role" {
   count = var.create_eks ? 1 : 0
-  name  = "wiz-eks-cluster-role-v6"
+  name  = "wiz-eks-cluster-role-v7"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -244,24 +229,41 @@ resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
 }
 
+resource "aws_iam_role_policy_attachment" "eks_cloudwatch_logs" {
+  count      = var.create_eks ? 1 : 0
+  role       = aws_iam_role.eks_cluster_role[0].name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"
+}
+
 # --- EKS Cluster ---
 resource "aws_eks_cluster" "wiz_eks" {
   count    = var.create_eks ? 1 : 0
-  name     = "wiz-eks-cluster-v6"
+  name     = "wiz-eks-cluster-v7"
   version  = "1.29"
   role_arn = aws_iam_role.eks_cluster_role[0].arn
 
   vpc_config {
     subnet_ids = [aws_subnet.public_a.id, aws_subnet.public_b.id]
-}
+  }
 
-  depends_on = [aws_iam_role_policy_attachment.eks_cluster_policy]
+  enabled_cluster_log_types = [
+    "api",
+    "audit",
+    "authenticator",
+    "controllerManager",
+    "scheduler"
+  ]
+
+  depends_on = [
+    aws_iam_role_policy_attachment.eks_cluster_policy,
+    aws_iam_role_policy_attachment.eks_cloudwatch_logs
+  ]
 }
 
 # --- EKS IAM Role for Worker Nodes ---
 resource "aws_iam_role" "eks_node_role" {
   count = var.create_eks ? 1 : 0
-  name  = "wiz-eks-node-role-v6"
+  name  = "wiz-eks-node-role-v7"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -297,7 +299,7 @@ resource "aws_iam_role_policy_attachment" "eks_registry_policy" {
 resource "aws_eks_node_group" "wiz_nodes" {
   count           = var.create_eks ? 1 : 0
   cluster_name    = aws_eks_cluster.wiz_eks[0].name
-  node_group_name = "wiz-eks-nodes-v6"
+  node_group_name = "wiz-eks-nodes-v7"
   node_role_arn   = aws_iam_role.eks_node_role[0].arn
   subnet_ids      = [aws_subnet.public_a.id]
 
