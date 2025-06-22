@@ -27,3 +27,15 @@ variable "create_eks" {
   type        = bool
   default     = true
 }
+
+variable "account_id" {
+  description = "AWS account ID (for GuardDuty member setup)"
+  type        = string
+  default     = ""
+}
+
+variable "account_email" {
+  description = "Email associated with AWS account"
+  type        = string
+  default     = ""
+}
