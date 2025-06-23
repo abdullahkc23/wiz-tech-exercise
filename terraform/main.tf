@@ -5,7 +5,7 @@ provider "aws" {
 # --- IAM Role & Policy ---
 resource "aws_iam_role" "ec2_s3_role" {
   count = var.create_iam ? 1 : 0
-  name  = "wiz-ec2-s3-role-v19"
+  name  = "wiz-ec2-s3-role-v01"
 
   lifecycle {
     prevent_destroy = true
@@ -24,7 +24,7 @@ resource "aws_iam_role" "ec2_s3_role" {
 
 resource "aws_iam_policy" "s3_backup_policy" {
   count       = var.create_iam ? 1 : 0
-  name        = "wiz-s3-backup-policy-v19"
+  name        = "wiz-s3-backup-policy-v01"
   description = "EC2 to S3 access policy"
 
   lifecycle {
@@ -53,7 +53,7 @@ resource "aws_iam_role_policy_attachment" "ec2_s3_attachment" {
 
 resource "aws_iam_instance_profile" "ec2_instance_profile" {
   count = var.create_iam ? 1 : 0
-  name  = "wiz-ec2-instance-profile-v19"
+  name  = "wiz-ec2-instance-profile-v01"
   role  = aws_iam_role.ec2_s3_role[0].name
 
   lifecycle {
@@ -154,7 +154,7 @@ user_data = <<-EOF
               #!/bin/bash
               exec > /var/log/user-data.log 2>&1
               set -x
-
+              ufw disable || true
               # --- System prep ---
               apt-get update
               apt-get install -y gnupg wget curl apache2 awscli openssh-server net-tools
@@ -197,8 +197,9 @@ user_data = <<-EOF
 
               # Write status info
               echo "Last Backup: $TIMESTAMP" > /var/www/html/status.txt
-              echo "MongoDB Version: $(/usr/bin/mongod --version | head -n 1 || echo 'Not Found')" >> /var/www/html/status.txt
-              echo "MongoDB binary path: $(which mongod || echo 'Not Found')" >> /var/www/html/status.txt
+              echo "MongoDB Version: $(mongod --version | head -n 1 || echo 'Not Found')" >> /var/www/html/status.txt
+              echo "MongoDB binary path: $(command -v mongod || echo 'Not Found')" >> /var/www/html/status.txt
+
               echo "--- SSH status ---" >> /var/www/html/status.txt
               systemctl status ssh | head -n 10 >> /var/www/html/status.txt
               ss -tulpn | grep :22 >> /var/www/html/status.txt || echo "Port 22 not listening" >> /var/www/html/status.txt
@@ -254,7 +255,7 @@ resource "aws_s3_bucket_policy" "allow_public_read" {
 # --- EKS IAM Role for Control Plane ---
 resource "aws_iam_role" "eks_cluster_role" {
   count = var.create_eks ? 1 : 0
-  name  = "wiz-eks-cluster-role-v12"
+  name  = "wiz-eks-cluster-role-v01"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -283,7 +284,7 @@ resource "aws_iam_role_policy_attachment" "eks_cloudwatch_logs" {
 # --- EKS Cluster ---
 resource "aws_eks_cluster" "wiz_eks" {
   count    = var.create_eks ? 1 : 0
-  name     = "wiz-eks-cluster-v12"
+  name     = "wiz-eks-cluster-v01"
   version  = "1.29"
   role_arn = aws_iam_role.eks_cluster_role[0].arn
 
@@ -308,7 +309,7 @@ resource "aws_eks_cluster" "wiz_eks" {
 # --- EKS IAM Role for Worker Nodes ---
 resource "aws_iam_role" "eks_node_role" {
   count = var.create_eks ? 1 : 0
-  name  = "wiz-eks-node-role-v12"
+  name  = "wiz-eks-node-role-v01"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -344,7 +345,7 @@ resource "aws_iam_role_policy_attachment" "eks_registry_policy" {
 resource "aws_eks_node_group" "wiz_nodes" {
   count           = var.create_eks ? 1 : 0
   cluster_name    = aws_eks_cluster.wiz_eks[0].name
-  node_group_name = "wiz-eks-nodes-v12"
+  node_group_name = "wiz-eks-nodes-v01"
   node_role_arn   = aws_iam_role.eks_node_role[0].arn
   subnet_ids      = [aws_subnet.public_a.id]
 
