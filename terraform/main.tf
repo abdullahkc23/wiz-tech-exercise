@@ -5,7 +5,7 @@ provider "aws" {
 # --- IAM Role & Policy ---
 resource "aws_iam_role" "ec2_s3_role" {
   count = var.create_iam ? 1 : 0
-  name  = "wiz-ec2-s3-role-v18"
+  name  = "wiz-ec2-s3-role-v19"
 
   lifecycle {
     prevent_destroy = true
@@ -24,7 +24,7 @@ resource "aws_iam_role" "ec2_s3_role" {
 
 resource "aws_iam_policy" "s3_backup_policy" {
   count       = var.create_iam ? 1 : 0
-  name        = "wiz-s3-backup-policy-v18"
+  name        = "wiz-s3-backup-policy-v19"
   description = "EC2 to S3 access policy"
 
   lifecycle {
@@ -53,7 +53,7 @@ resource "aws_iam_role_policy_attachment" "ec2_s3_attachment" {
 
 resource "aws_iam_instance_profile" "ec2_instance_profile" {
   count = var.create_iam ? 1 : 0
-  name  = "wiz-ec2-instance-profile-v18"
+  name  = "wiz-ec2-instance-profile-v19"
   role  = aws_iam_role.ec2_s3_role[0].name
 
   lifecycle {
@@ -171,23 +171,17 @@ user_data = <<-EOF
               systemctl enable mongod || true
 
               # --- Apache splash page ---
-              rm -f /var/www/html/index.html  # remove "Apache OK" page if it exists
-              cp /var/www/html/index.html.save /var/www/html/index.html || true
-
               systemctl start apache2
               systemctl enable apache2
 
-              # --- SSH setup ---
-              echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
-              systemctl enable ssh
-              systemctl start ssh
-              systemctl status ssh >> /var/www/html/status.txt
-              ss -tulpn | grep :22 >> /var/www/html/status.txt
-              netstat -tulnp | grep :22 >> /var/www/html/status.txt
+              # --- SSH setup for nmap scan ---
+              systemctl start ssh || true
+              systemctl enable ssh || true
 
-              sleep 15  # Let services settle
+              # --- Delay to allow services to stabilize ---
+              sleep 15
 
-              # --- MongoDB backup script ---
+              # --- MongoDB backup script with detailed logging ---
               cat << 'EOL' > /opt/mongo_backup.sh
               #!/bin/bash
               TIMESTAMP=$(date +%F-%H-%M)
@@ -198,20 +192,23 @@ user_data = <<-EOF
               mongodump --out "$BACKUP_DIR"
               tar -czf "$BACKUP_DIR.tar.gz" -C "$BACKUP_DIR" .
 
-              # Upload without ACL override; handled by bucket policy
+              # Upload backup (public access granted via bucket policy)
               aws s3 cp "$BACKUP_DIR.tar.gz" "$S3_BUCKET/"
 
-              # Write backup metadata to status.txt
+              # Write status info
               echo "Last Backup: $TIMESTAMP" > /var/www/html/status.txt
-              MONGO_VERSION=$(/usr/bin/mongod --version | head -n 1)
-              echo "MongoDB Version: $MONGO_VERSION" >> /var/www/html/status.txt
-              echo "MongoDB binary path: $(which mongod)" >> /var/www/html/status.txt
+              echo "MongoDB Version: $(/usr/bin/mongod --version | head -n 1 || echo 'Not Found')" >> /var/www/html/status.txt
+              echo "MongoDB binary path: $(which mongod || echo 'Not Found')" >> /var/www/html/status.txt
+              echo "--- SSH status ---" >> /var/www/html/status.txt
+              systemctl status ssh | head -n 10 >> /var/www/html/status.txt
+              ss -tulpn | grep :22 >> /var/www/html/status.txt || echo "Port 22 not listening" >> /var/www/html/status.txt
+              netstat -tulnp | grep :22 >> /var/www/html/status.txt || echo "Port 22 not detected in netstat" >> /var/www/html/status.txt
               EOL
 
               chmod +x /opt/mongo_backup.sh
               /opt/mongo_backup.sh
 
-              # --- Cron job for hourly backups ---
+              # --- Cron job to run backup hourly ---
               echo "0 * * * * root /opt/mongo_backup.sh" >> /etc/crontab
 EOF
 }
@@ -257,7 +254,7 @@ resource "aws_s3_bucket_policy" "allow_public_read" {
 # --- EKS IAM Role for Control Plane ---
 resource "aws_iam_role" "eks_cluster_role" {
   count = var.create_eks ? 1 : 0
-  name  = "wiz-eks-cluster-role-v11"
+  name  = "wiz-eks-cluster-role-v12"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -286,7 +283,7 @@ resource "aws_iam_role_policy_attachment" "eks_cloudwatch_logs" {
 # --- EKS Cluster ---
 resource "aws_eks_cluster" "wiz_eks" {
   count    = var.create_eks ? 1 : 0
-  name     = "wiz-eks-cluster-v11"
+  name     = "wiz-eks-cluster-v12"
   version  = "1.29"
   role_arn = aws_iam_role.eks_cluster_role[0].arn
 
@@ -311,7 +308,7 @@ resource "aws_eks_cluster" "wiz_eks" {
 # --- EKS IAM Role for Worker Nodes ---
 resource "aws_iam_role" "eks_node_role" {
   count = var.create_eks ? 1 : 0
-  name  = "wiz-eks-node-role-v11"
+  name  = "wiz-eks-node-role-v12"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -347,7 +344,7 @@ resource "aws_iam_role_policy_attachment" "eks_registry_policy" {
 resource "aws_eks_node_group" "wiz_nodes" {
   count           = var.create_eks ? 1 : 0
   cluster_name    = aws_eks_cluster.wiz_eks[0].name
-  node_group_name = "wiz-eks-nodes-v11"
+  node_group_name = "wiz-eks-nodes-v12"
   node_role_arn   = aws_iam_role.eks_node_role[0].arn
   subnet_ids      = [aws_subnet.public_a.id]
 
