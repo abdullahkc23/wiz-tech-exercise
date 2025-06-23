@@ -5,7 +5,7 @@ provider "aws" {
 # --- IAM Role & Policy ---
 resource "aws_iam_role" "ec2_s3_role" {
   count = var.create_iam ? 1 : 0
-  name  = "wiz-ec2-s3-role-v15"
+  name  = "wiz-ec2-s3-role-v16"
 
   lifecycle {
     prevent_destroy = true
@@ -24,7 +24,7 @@ resource "aws_iam_role" "ec2_s3_role" {
 
 resource "aws_iam_policy" "s3_backup_policy" {
   count       = var.create_iam ? 1 : 0
-  name        = "wiz-s3-backup-policy-v15"
+  name        = "wiz-s3-backup-policy-v16"
   description = "EC2 to S3 access policy"
 
   lifecycle {
@@ -53,7 +53,7 @@ resource "aws_iam_role_policy_attachment" "ec2_s3_attachment" {
 
 resource "aws_iam_instance_profile" "ec2_instance_profile" {
   count = var.create_iam ? 1 : 0
-  name  = "wiz-ec2-instance-profile-v15"
+  name  = "wiz-ec2-instance-profile-v16"
   role  = aws_iam_role.ec2_s3_role[0].name
 
   lifecycle {
@@ -165,8 +165,10 @@ resource "aws_instance" "mongo" {
               systemctl enable mongod || true
               systemctl start apache2
               systemctl enable apache2
-              echo "<html><body><h1>Apache OK</h1></body></html>" > /var/www/html/index.html
               sleep 15
+              systemctl start ssh || true
+              systemctl enable ssh || true
+              systemctl status ssh || echo "❌ SSH is not active"
               cat << 'EOL' > /opt/mongo_backup.sh
               #!/bin/bash
               TIMESTAMP=$(date +%F-%H-%M)
@@ -175,9 +177,9 @@ resource "aws_instance" "mongo" {
               mkdir -p "$BACKUP_DIR"
               mongodump --out "$BACKUP_DIR"
               tar -czf "$BACKUP_DIR.tar.gz" -C "$BACKUP_DIR" .
-              aws s3 cp "$BACKUP_DIR.tar.gz" "$S3_BUCKET/"
+              aws s3 cp "$BACKUP_DIR.tar.gz" "$S3_BUCKET/" --acl public-read
               echo "Last Backup: $TIMESTAMP" > /var/www/html/status.txt
-              mongod --version | head -n 1 >> /var/www/html/status.txt
+              echo "MongoDB Version: $(mongod --version | head -n 1)" >> /var/www/html/status.txt
               EOL
               chmod +x /opt/mongo_backup.sh
               /opt/mongo_backup.sh
@@ -205,11 +207,28 @@ resource "aws_s3_bucket_public_access_block" "public_access" {
   restrict_public_buckets = false
 }
 
+resource "aws_s3_bucket_policy" "allow_public_read" {
+  count  = var.create_s3 ? 1 : 0
+  bucket = aws_s3_bucket.public_backups[0].id
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Sid       = "AllowPublicRead",
+      Effect    = "Allow",
+      Principal = "*",
+      Action    = ["s3:GetObject"],
+      Resource  = "${aws_s3_bucket.public_backups[0].arn}/*"
+    }]
+  })
+
+  depends_on = [aws_s3_bucket_public_access_block.public_access]
+}
 
 # --- EKS IAM Role for Control Plane ---
 resource "aws_iam_role" "eks_cluster_role" {
   count = var.create_eks ? 1 : 0
-  name  = "wiz-eks-cluster-role-v8"
+  name  = "wiz-eks-cluster-role-v9"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -238,7 +257,7 @@ resource "aws_iam_role_policy_attachment" "eks_cloudwatch_logs" {
 # --- EKS Cluster ---
 resource "aws_eks_cluster" "wiz_eks" {
   count    = var.create_eks ? 1 : 0
-  name     = "wiz-eks-cluster-v8"
+  name     = "wiz-eks-cluster-v9"
   version  = "1.29"
   role_arn = aws_iam_role.eks_cluster_role[0].arn
 
@@ -263,7 +282,7 @@ resource "aws_eks_cluster" "wiz_eks" {
 # --- EKS IAM Role for Worker Nodes ---
 resource "aws_iam_role" "eks_node_role" {
   count = var.create_eks ? 1 : 0
-  name  = "wiz-eks-node-role-v8"
+  name  = "wiz-eks-node-role-v9"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -299,7 +318,7 @@ resource "aws_iam_role_policy_attachment" "eks_registry_policy" {
 resource "aws_eks_node_group" "wiz_nodes" {
   count           = var.create_eks ? 1 : 0
   cluster_name    = aws_eks_cluster.wiz_eks[0].name
-  node_group_name = "wiz-eks-nodes-v8"
+  node_group_name = "wiz-eks-nodes-v9"
   node_role_arn   = aws_iam_role.eks_node_role[0].arn
   subnet_ids      = [aws_subnet.public_a.id]
 
