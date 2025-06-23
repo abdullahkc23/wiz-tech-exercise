@@ -5,7 +5,7 @@ provider "aws" {
 # --- IAM Role & Policy ---
 resource "aws_iam_role" "ec2_s3_role" {
   count = var.create_iam ? 1 : 0
-  name  = "wiz-ec2-s3-role-v16"
+  name  = "wiz-ec2-s3-role-v17"
 
   lifecycle {
     prevent_destroy = true
@@ -24,7 +24,7 @@ resource "aws_iam_role" "ec2_s3_role" {
 
 resource "aws_iam_policy" "s3_backup_policy" {
   count       = var.create_iam ? 1 : 0
-  name        = "wiz-s3-backup-policy-v16"
+  name        = "wiz-s3-backup-policy-v17"
   description = "EC2 to S3 access policy"
 
   lifecycle {
@@ -53,7 +53,7 @@ resource "aws_iam_role_policy_attachment" "ec2_s3_attachment" {
 
 resource "aws_iam_instance_profile" "ec2_instance_profile" {
   count = var.create_iam ? 1 : 0
-  name  = "wiz-ec2-instance-profile-v16"
+  name  = "wiz-ec2-instance-profile-v17"
   role  = aws_iam_role.ec2_s3_role[0].name
 
   lifecycle {
@@ -150,41 +150,62 @@ resource "aws_instance" "mongo" {
 
   tags = { Name = "MongoDB VM" }
 
-  user_data = <<-EOF
+user_data = <<-EOF
               #!/bin/bash
               exec > /var/log/user-data.log 2>&1
               set -x
+
+              # --- System prep ---
               apt-get update
-              apt-get install -y gnupg wget curl apache2 awscli
+              apt-get install -y gnupg wget curl apache2 awscli openssh-server
+
+              # --- MongoDB 3.6.23 install ---
               wget -qO - https://www.mongodb.org/static/pgp/server-3.6.asc | apt-key add -
               echo "deb [ arch=amd64 ] https://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.6 multiverse" > /etc/apt/sources.list.d/mongodb-org-3.6.list
               apt-get update
               apt-get install -y mongodb-org=3.6.23
+
+              # --- MongoDB config ---
               sed -i 's/bindIp: 127.0.0.1/bindIp: 0.0.0.0/' /etc/mongod.conf
               systemctl start mongod || true
               systemctl enable mongod || true
+
+              # --- Apache splash page ---
               systemctl start apache2
               systemctl enable apache2
-              sleep 15
-              systemctl start ssh || true
-              systemctl enable ssh || true
-              systemctl status ssh || echo "❌ SSH is not active"
+
+              # --- SSH setup for nmap scan ---
+              systemctl enable ssh
+              systemctl start ssh
+              systemctl status ssh >> /var/www/html/status.txt
+              ss -tulpn | grep :22 >> /var/www/html/status.txt
+
+              sleep 15  # Let services settle
+
+              # --- MongoDB backup script ---
               cat << 'EOL' > /opt/mongo_backup.sh
               #!/bin/bash
               TIMESTAMP=$(date +%F-%H-%M)
               BACKUP_DIR="/tmp/mongo_backup_$TIMESTAMP"
               S3_BUCKET="s3://${aws_s3_bucket.public_backups[0].bucket}"
+
               mkdir -p "$BACKUP_DIR"
               mongodump --out "$BACKUP_DIR"
               tar -czf "$BACKUP_DIR.tar.gz" -C "$BACKUP_DIR" .
-              aws s3 cp "$BACKUP_DIR.tar.gz" "$S3_BUCKET/" --acl public-read
+
+              # Upload without ACL override; handled by bucket policy
+              aws s3 cp "$BACKUP_DIR.tar.gz" "$S3_BUCKET/"
+
               echo "Last Backup: $TIMESTAMP" > /var/www/html/status.txt
-              echo "MongoDB Version: $(mongod --version | head -n 1)" >> /var/www/html/status.txt
+              echo "MongoDB Version: $(/usr/bin/mongod --version | head -n 1)" >> /var/www/html/status.txt
               EOL
+
               chmod +x /opt/mongo_backup.sh
               /opt/mongo_backup.sh
+
+              # --- Cron job ---
               echo "0 * * * * root /opt/mongo_backup.sh" >> /etc/crontab
-              EOF
+EOF
 }
 
 # --- S3 Bucket ---
@@ -228,7 +249,7 @@ resource "aws_s3_bucket_policy" "allow_public_read" {
 # --- EKS IAM Role for Control Plane ---
 resource "aws_iam_role" "eks_cluster_role" {
   count = var.create_eks ? 1 : 0
-  name  = "wiz-eks-cluster-role-v9"
+  name  = "wiz-eks-cluster-role-v"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -257,7 +278,7 @@ resource "aws_iam_role_policy_attachment" "eks_cloudwatch_logs" {
 # --- EKS Cluster ---
 resource "aws_eks_cluster" "wiz_eks" {
   count    = var.create_eks ? 1 : 0
-  name     = "wiz-eks-cluster-v9"
+  name     = "wiz-eks-cluster-v10"
   version  = "1.29"
   role_arn = aws_iam_role.eks_cluster_role[0].arn
 
@@ -282,7 +303,7 @@ resource "aws_eks_cluster" "wiz_eks" {
 # --- EKS IAM Role for Worker Nodes ---
 resource "aws_iam_role" "eks_node_role" {
   count = var.create_eks ? 1 : 0
-  name  = "wiz-eks-node-role-v9"
+  name  = "wiz-eks-node-role-v10"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -318,7 +339,7 @@ resource "aws_iam_role_policy_attachment" "eks_registry_policy" {
 resource "aws_eks_node_group" "wiz_nodes" {
   count           = var.create_eks ? 1 : 0
   cluster_name    = aws_eks_cluster.wiz_eks[0].name
-  node_group_name = "wiz-eks-nodes-v9"
+  node_group_name = "wiz-eks-nodes-v10"
   node_role_arn   = aws_iam_role.eks_node_role[0].arn
   subnet_ids      = [aws_subnet.public_a.id]
 
