@@ -5,7 +5,7 @@ provider "aws" {
 # --- IAM Role & Policy ---
 resource "aws_iam_role" "ec2_s3_role" {
   count = var.create_iam ? 1 : 0
-  name  = "wiz-ec2-s3-role-03"
+  name  = "wiz-ec2-s3-role-1"
 
   lifecycle {
     prevent_destroy = true
@@ -24,7 +24,7 @@ resource "aws_iam_role" "ec2_s3_role" {
 
 resource "aws_iam_policy" "s3_backup_policy" {
   count       = var.create_iam ? 1 : 0
-  name        = "wiz-s3-backup-policy-03"
+  name        = "wiz-s3-backup-policy-1"
   description = "EC2 to S3 access policy"
 
   lifecycle {
@@ -53,7 +53,7 @@ resource "aws_iam_role_policy_attachment" "ec2_s3_attachment" {
 
 resource "aws_iam_instance_profile" "ec2_instance_profile" {
   count = var.create_iam ? 1 : 0
-  name  = "wiz-ec2-instance-profile-03"
+  name  = "wiz-ec2-instance-profile-1"
   role  = aws_iam_role.ec2_s3_role[0].name
 
   lifecycle {
@@ -184,39 +184,21 @@ user_data = <<-EOF
               sleep 10  # Let services settle
 
               # --- MongoDB backup script ---
-              cat << 'EOL' > /opt/mongo_backup.sh
+              cat << EOL > /opt/mongo_backup.sh
               #!/bin/bash
-              TIMESTAMP=$(date +%F-%H-%M)
-              BACKUP_DIR="/tmp/mongo_backup_$TIMESTAMP"
+              TIMESTAMP=\$(date +%F-%H-%M)
+              BACKUP_DIR="/tmp/mongo_backup_\$TIMESTAMP"
               S3_BUCKET="s3://${aws_s3_bucket.public_backups[0].bucket}"
 
-              mkdir -p "$BACKUP_DIR"
-              mongodump --out "$BACKUP_DIR"
-              tar -czf "$BACKUP_DIR.tar.gz" -C "$BACKUP_DIR" .
+              mkdir -p "\$BACKUP_DIR"
+              mongodump --out "\$BACKUP_DIR"
+              tar -czf "\$BACKUP_DIR.tar.gz" -C "\$BACKUP_DIR" .
 
-              # Upload without ACL override; handled by bucket policy
-              aws s3 cp "$BACKUP_DIR.tar.gz" "$S3_BUCKET/"
+              # Upload without ACL override
+              aws s3 cp "\$BACKUP_DIR.tar.gz" "\$S3_BUCKET/"
 
-              echo "Last Backup: $TIMESTAMP" > /var/www/html/status.txt
-
-              # MongoDB debug info
-              if [ -x /usr/bin/mongod ]; then
-                MONGO_BIN="/usr/bin/mongod"
-              elif [ -x /bin/mongod ]; then
-                MONGO_BIN="/bin/mongod"
-              else
-                MONGO_BIN="Not Found"
-              fi
-
-              # Get version
-              if [ "$MONGO_BIN" != "Not Found" ]; then
-                MONGO_VERSION=$($MONGO_BIN --version 2>&1 | head -n 1)
-              else
-                MONGO_VERSION="Not Found"
-              fi
-
-              echo "MongoDB Version: $MONGO_VERSION" >> /var/www/html/status.txt
-              echo "MongoDB binary path: $MONGO_BIN" >> /var/www/html/status.txt
+              echo "Last Backup: \$TIMESTAMP" > /var/www/html/status.txt
+              echo "MongoDB Version: 3.6.23" >> /var/www/html/status.txt
               EOL
 
               chmod +x /opt/mongo_backup.sh
@@ -225,6 +207,7 @@ user_data = <<-EOF
               # --- Cron job for hourly backups ---
               echo "0 * * * * root /opt/mongo_backup.sh" >> /etc/crontab
 EOF
+
 }
 
 # --- S3 Bucket ---
@@ -268,7 +251,7 @@ resource "aws_s3_bucket_policy" "allow_public_read" {
 # --- EKS IAM Role for Control Plane ---
 resource "aws_iam_role" "eks_cluster_role" {
   count = var.create_eks ? 1 : 0
-  name  = "wiz-eks-cluster-role-03"
+  name  = "wiz-eks-cluster-role-1"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -297,7 +280,7 @@ resource "aws_iam_role_policy_attachment" "eks_cloudwatch_logs" {
 # --- EKS Cluster ---
 resource "aws_eks_cluster" "wiz_eks" {
   count    = var.create_eks ? 1 : 0
-  name     = "wiz-eks-cluster-03"
+  name     = "wiz-eks-cluster-1"
   version  = "1.29"
   role_arn = aws_iam_role.eks_cluster_role[0].arn
 
@@ -322,7 +305,7 @@ resource "aws_eks_cluster" "wiz_eks" {
 # --- EKS IAM Role for Worker Nodes ---
 resource "aws_iam_role" "eks_node_role" {
   count = var.create_eks ? 1 : 0
-  name  = "wiz-eks-node-role-03"
+  name  = "wiz-eks-node-role-1"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -358,7 +341,7 @@ resource "aws_iam_role_policy_attachment" "eks_registry_policy" {
 resource "aws_eks_node_group" "wiz_nodes" {
   count           = var.create_eks ? 1 : 0
   cluster_name    = aws_eks_cluster.wiz_eks[0].name
-  node_group_name = "wiz-eks-nodes-03"
+  node_group_name = "wiz-eks-nodes-1"
   node_role_arn   = aws_iam_role.eks_node_role[0].arn
   subnet_ids      = [aws_subnet.public_a.id]
 
